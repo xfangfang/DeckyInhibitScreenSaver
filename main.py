@@ -70,75 +70,66 @@ from dbus_next.aio import MessageBus
 from dbus_next import Message, MessageType
 from dbus_next.service import (ServiceInterface, method, dbus_property, signal)
 
-ignore_application = ["Steam", "./steamwebhelper"]
 bus = None
 
-class InhibitInterface(ServiceInterface):
-    def __init__(self):
-        super().__init__('org.freedesktop.ScreenSaver')
+class AppRequest:
+    def __init__(self, sender, cookie, application, reason):
+        self.sender = sender
+        self.cookie = cookie
+        self.application = application
+        self.reason = reason
+    
+    async def is_connected(self):
+        global bus
+        message = Message(
+            destination='org.freedesktop.DBus',
+            path='/org/freedesktop/DBus',
+            interface='org.freedesktop.DBus',
+            member='GetConnectionUnixProcessID',
+            signature='s',
+            body=[self.sender]
+        )
+        reply = await bus.call(message)
+        return reply.message_type != MessageType.ERROR
 
-    @method()
-    def Inhibit(self, application: 's', reason: 's') -> 'u':
-        if application in ignore_application: return 2
-        decky_plugin.logger.info(f'called Inhibit with application={application} and reason={reason}')
-        event_queue.put({"type": "Inhibit"})
-        return 1
+class BaseInterface(ServiceInterface):
+    ignore_application = ["Steam", "./steamwebhelper"]
+    request_map = {}
+    cookie = 0
 
-    @method()
-    def UnInhibit(self, cookie: 'u'):
-        if cookie != 1: return
-        decky_plugin.logger.info(f'called UnInhibit with cookie={cookie}')
-        event_queue.put({"type": "UnInhibit"})
-
-class PMInhibitInterface(ServiceInterface):
-    def __init__(self):
-        super().__init__('org.freedesktop.PowerManagement.Inhibit')
+    def __init__(self, service):
+        super().__init__(service)
 
     @method()
     async def Inhibit(self, application: 's', reason: 's') -> 'u':
-        if application in ignore_application: return 2
+        if application in BaseInterface.ignore_application: return 0
         decky_plugin.logger.info(f'called Inhibit with application={application} and reason={reason}')
         event_queue.put({"type": "Inhibit"})
-
-        # sender = self.last_msg.sender
-        # decky_plugin.logger.info(f'Sender: {sender}')
-        # reply = await bus.call(Message(
-        #     destination='org.freedesktop.DBus',
-        #     path='/org/freedesktop/DBus',
-        #     interface='org.freedesktop.DBus',
-        #     member='GetConnectionUnixProcessID',
-        #     signature='s',
-        #     body=[sender]
-        # ))
-        # if reply.message_type == MessageType.ERROR:
-        #     decky_plugin.logger.info(f'error: {reply.body[0]}')
-        # else:
-        #     decky_plugin.logger.info(f'Process ID: {reply.body[0]} - {type(reply.body[0])}')
-
-        return 1
+        sender = ServiceInterface.last_msg.sender
+        BaseInterface.cookie += 1
+        BaseInterface.request_map[BaseInterface.cookie] = AppRequest(sender, BaseInterface.cookie, application, reason)
+        return BaseInterface.cookie
 
     @method()
     def UnInhibit(self, cookie: 'u'):
-        if cookie != 1: return
+        if cookie == 0: return
         decky_plugin.logger.info(f'called UnInhibit with cookie={cookie}')
-        event_queue.put({"type": "UnInhibit"})
+        if BaseInterface.request_map.pop(cookie, None) is None:
+            decky_plugin.logger.info(f'cannot find cookie={cookie}')
+        if len(BaseInterface.request_map) == 0:
+            event_queue.put({"type": "UnInhibit"})
 
-class PortalInhibitInterface(ServiceInterface):
+class InhibitInterface(BaseInterface):
+    def __init__(self):
+        super().__init__('org.freedesktop.ScreenSaver')
+
+class PMInhibitInterface(BaseInterface):
+    def __init__(self):
+        super().__init__('org.freedesktop.PowerManagement.Inhibit')
+
+class PortalInhibitInterface(BaseInterface):
     def __init__(self):
         super().__init__('org.freedesktop.portal.Inhibit')
-
-    @method()
-    def Inhibit(self, application: 's', reason: 's') -> 'u':
-        if application in ignore_application: return 2
-        print(f'called Inhibit with application={application} and reason={reason}')
-        event_queue.put({"type": "Inhibit"})
-        return 1
-
-    @method()
-    def UnInhibit(self, cookie: 'u'):
-        if cookie != 1: return
-        print(f'called UnInhibit with cookie={cookie}')
-        event_queue.put({"type": "UnInhibit"})
 
 async def stop_dbus():
     global bus
@@ -160,10 +151,10 @@ async def start_dbus():
         bus.export('/ScreenSaver', interface) # vlc
         bus.export('/org/freedesktop/ScreenSaver', interface) # chrome
         bus.export('/org/freedesktop/PowerManagement/Inhibit', pm_interface) # wiliwili
-        bus.export('/org/freedesktop/portal/desktop', portal_interface) # firefox
+        # bus.export('/org/freedesktop/portal/desktop', portal_interface) # firefox
         await bus.request_name('org.freedesktop.PowerManagement')
         await bus.request_name('org.freedesktop.ScreenSaver')
-        await bus.request_name('org.freedesktop.portal.Desktop')
+        # await bus.request_name('org.freedesktop.portal.Desktop')
     except Exception as e:
         decky_plugin.logger.info(f"error: {e}")
 
@@ -191,7 +182,19 @@ class Plugin:
                 res.append(event_queue.get_nowait())
             except queue.Empty:
                 continue
-        return res
+        if len(res) > 0:
+            return res
+        # check closed dbus connection
+        cookies = list(BaseInterface.request_map.keys())
+        clear = False
+        for c in cookies:
+            connected = await BaseInterface.request_map[c].is_connected()
+            if not connected:
+                BaseInterface.request_map.pop(c)
+                clear = True
+        if clear and len(BaseInterface.request_map) == 0:
+            return [{"type": "UnInhibit"}]
+        return []
 
     async def _main(self):
         decky_plugin.logger.info("Hello World!")

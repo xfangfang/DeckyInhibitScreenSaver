@@ -427,8 +427,11 @@ class ServiceInterface:
     def _remove_bus(interface, bus):
         interface.__buses.remove(bus)
 
+    last_msg = None
+
     @staticmethod
     def _msg_body_to_args(msg):
+        ServiceInterface.last_msg = msg
         if signature_contains_type(msg.signature_tree, msg.body, 'h'):
             # XXX: This deep copy could be expensive if messages are very
             # large. We could optimize this by only copying what we change
