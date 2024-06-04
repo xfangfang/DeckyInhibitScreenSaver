@@ -11,6 +11,9 @@
             "linux": {
                 "command": "${workspaceFolder}/.vscode/setup.sh",
             },
+            "osx": {
+                "command": "${workspaceFolder}/.vscode/setup.sh",
+            },
             // // placeholder for windows scripts, not currently planned
             // "windows": {
             //     "command": "call -c ${workspaceFolder}\\.vscode\\setup.bat",
@@ -47,6 +50,9 @@
             "linux": {
                 "command": "${workspaceFolder}/.vscode/config.sh",
             },
+            "osx": {
+                "command": "${workspaceFolder}/.vscode/config.sh",
+            },
             // // placeholder for windows scripts, not currently planned
             // "windows": {
             //     "command": "call ${workspaceFolder}\\.vscode\\config.bat",
@@ -59,6 +65,9 @@
             "group": "build",
             "detail": "Build plugin with CLI",
             "linux": {
+                "command": "${workspaceFolder}/.vscode/build.sh",
+            },
+            "osx": {
                 "command": "${workspaceFolder}/.vscode/build.sh",
             },
             // // placeholder for windows logic, not currently planned
@@ -90,7 +99,7 @@
             "dependsOn": [
                 "chmodplugins"
             ],
-            "command": "rsync -azp --chmod=D0755,F0755 --rsh='ssh -p ${config:deckport} ${config:deckkey}' out/ ${config:deckuser}@${config:deckip}:${config:deckdir}/homebrew/plugins",
+            "command": "rsync -azp --chmod=u+rwx,g+rx,o+rx --rsh='ssh -p ${config:deckport} ${config:deckkey}' out/ ${config:deckuser}@${config:deckip}:${config:deckdir}/homebrew/plugins",
             "problemMatcher": []
         },
         //
