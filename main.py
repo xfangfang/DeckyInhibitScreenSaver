@@ -117,7 +117,14 @@ class Plugin:
         await stop_dbus()
         event_queue.queue.clear()
 
+    async def is_running(self):
+        global bus
+        return bus is not None
+
     async def get_event(self):
+        global bus
+        if bus is None:
+            return []
         res = []
         while not event_queue.empty():
             try:
@@ -139,11 +146,11 @@ class Plugin:
         return []
 
     async def get_settings(self, key: str, defaults):
-        logger.info('[settings] get {}'.format(key))
+        decky_plugin.logger.info('[settings] get {}'.format(key))
         return settings.getSetting(key, defaults)
 
     async def set_settings(self, key: str, value):
-        logger.info('[settings] set {}: {}'.format(key, value))
+        decky_plugin.logger.info('[settings] set {}: {}'.format(key, value))
         return settings.setSetting(key, value)
 
     async def _main(self):

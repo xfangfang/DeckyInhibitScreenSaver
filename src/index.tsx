@@ -10,23 +10,33 @@ import { VFC } from "react";
 import { useState } from 'react'
 import { GiNightSleep } from "react-icons/gi";
 
-let backendRunning = true;
+let backendRunning = false;
 
 const Content: VFC<{ serverApi: ServerAPI }> = ({serverApi}) => {
   const [running, setRunning] = useState<boolean>(backendRunning);
+
+  const startBackend = async () => {
+    return await serverApi.callPluginMethod<any, any>("start_backend", {});
+  }
+
+  const stopBackend = async () => {
+    return await serverApi.callPluginMethod<any, any>("stop_backend", {});
+  }
+
+  const setSettings = async (key: string, value: any) => {
+    return await serverApi.callPluginMethod<any, any>("set_settings", {key: key, value: value});
+  }
+  
   return (
     <PanelSection title="Settings">
       <PanelSectionRow>
-        <ToggleField
+      <ToggleField
           label='Start'
           onChange={async (checked) => {
             setRunning(checked)
-            DeckyPluginLoader.toaster.toast({
-              title: "视频播放检测",
-              body: checked ? "已开启": "已关闭",
-              icon: <GiNightSleep />,
-            });
-            await serverApi.callPluginMethod<any, any>(checked ? "start_backend" : "stop_backend", {});
+            backendRunning = checked
+            await setSettings("run_on_login", checked)
+            checked ? await startBackend() : await stopBackend() 
           }}
           checked={running}
           />
@@ -36,8 +46,6 @@ const Content: VFC<{ serverApi: ServerAPI }> = ({serverApi}) => {
 };
 
 export default definePlugin((serverApi: ServerAPI) => {
-  console.debug("on Start");
-  let requestChanging = 0;
   function onSettingsChanges(buffer: ArrayBuffer) {
     let view        = new DataView(buffer);
     let ac_idle         = view.getFloat32(6, true);
@@ -45,39 +53,15 @@ export default definePlugin((serverApi: ServerAPI) => {
     let ac_suspend      = view.getFloat32(16, true);
     let battery_suspend = view.getFloat32(11,true)
     console.debug(`${ac_idle}, ${battery_idle}, ${ac_suspend}, ${battery_suspend}`)
-    if (requestChanging <= 0 && backendRunning) {
-      // 用户手动修改
-      // 1. 停止后端运行
-      backendRunning = false;
-      setTimeout(async () => {
-        await serverApi.callPluginMethod<any, any>("stop_backend", {});
-      }, 0);
-
-      // 2. 弹出提示
-      Window.DeckyPluginLoader.toaster.toast({
-        title: "视频播放检测",
-        body: "已关闭",
-        icon: <GiNightSleep />,
-      });
-      requestChanging = 0;
-    } else {
-      requestChanging--;
-    }
-    
   };
-
-  // 注册回调函数时会触发一次 onSettingsChanges
-  requestChanging = 1;
   let handle = SteamClient.System.RegisterForSettingsChanges(onSettingsChanges);
 
-  // index:
-  // 1: battery_idle
-  // 2: ac_idle
-  // 3: battery_suspend
-  // 4: ac_suspend
-  //
-  // data:
-  // 0 for disable (seconds)
+  /**
+   * Protobuf setting generation
+   * @param index 1:battery_idle; 2:ac_idle; 3:battery_suspend; 4:ac_suspend
+   * @param data 0 for disable (seconds)
+   * @returns settings in binary string
+   */
   function genSettings(index: number, data: number) {
     let buffer = new ArrayBuffer(5);
     let view = new DataView(buffer);
@@ -92,12 +76,24 @@ export default definePlugin((serverApi: ServerAPI) => {
     return binary;
   }
 
+  const updateSetting = async (data: string) => {
+    await SteamClient.System.UpdateSettings(window.btoa(data))
+  }
+  
   const getEvent = async () => {
     return await serverApi.callPluginMethod<any, any>("get_event", {});
   }
 
-  const updateSetting = async (data: string) => {
-    await SteamClient.System.UpdateSettings(window.btoa(data))
+  const getSettings = async (key: string, defaults: any) => {
+    return await serverApi.callPluginMethod<any, any>("get_settings", {key: key, defaults: defaults});
+  }
+
+  const startBackend = async () => {
+    return await serverApi.callPluginMethod<any, any>("start_backend", {});
+  }
+
+  const stopBackend = async () => {
+    return await serverApi.callPluginMethod<any, any>("stop_backend", {});
   }
 
   let interval = setInterval(async () => {
@@ -107,23 +103,20 @@ export default definePlugin((serverApi: ServerAPI) => {
     let event = data.result;
     for (let e of event) {
       if (e.type == 'Inhibit') {
-        requestChanging++;
         await updateSetting(genSettings(1, 0)+genSettings(2, 0)+genSettings(3, 0)+genSettings(4, 0));
       } else if (e.type == 'UnInhibit') {
-        // todo: restore
-        requestChanging++;
         await updateSetting(genSettings(1, 300)+genSettings(2, 300)+genSettings(3, 600)+genSettings(4, 600));
-      } if (e.type == 'brightness') {
-        await SteamClient.System.Display.SetBrightness(e.value / 100);
-      } else if (e.type == 'idle') {
-        requestChanging++;
-        await updateSetting(genSettings(e.idle_type, e.value));
       }
     }
   }, 1000)
 
   setTimeout(async () => {
-    await serverApi.callPluginMethod<any, any>("start_backend", {});
+    let run = await getSettings("run_on_login", true)
+    console.debug("run_on_login", run)
+    if (run.success && run.result) {
+      backendRunning = true
+      await startBackend()
+    }
   }, 0);
 
   return {
@@ -131,9 +124,12 @@ export default definePlugin((serverApi: ServerAPI) => {
     content: <Content serverApi={serverApi} />,
     icon: <GiNightSleep />,
     onDismount() {
-      console.debug("on Dismount");
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       if (handle) handle.unregister();
+      setTimeout(async () => {
+        await stopBackend()
+        await updateSetting(genSettings(1, 300)+genSettings(2, 300)+genSettings(3, 600)+genSettings(4, 600));
+      }, 0);
     },
   };
 });
