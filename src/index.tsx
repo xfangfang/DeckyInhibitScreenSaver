@@ -11,9 +11,14 @@ import { useState } from 'react'
 import { GiNightSleep } from "react-icons/gi";
 
 let backendRunning = false;
+let showNotify     = false;
+
+const RUN_ON_LOGIN = "run_on_login"
+const SHOW_NOTIFY  = "show_notify"
 
 const Content: VFC<{ serverApi: ServerAPI }> = ({serverApi}) => {
   const [running, setRunning] = useState<boolean>(backendRunning);
+  const [notify, setNotify] = useState<boolean>(showNotify);
 
   const startBackend = async () => {
     return await serverApi.callPluginMethod<any, any>("start_backend", {});
@@ -31,14 +36,23 @@ const Content: VFC<{ serverApi: ServerAPI }> = ({serverApi}) => {
     <PanelSection title="Settings">
       <PanelSectionRow>
       <ToggleField
-          label='Start'
+          label='Background Monitor'
           onChange={async (checked) => {
             setRunning(checked)
             backendRunning = checked
-            await setSettings("run_on_login", checked)
+            await setSettings(RUN_ON_LOGIN, checked)
             checked ? await startBackend() : await stopBackend() 
           }}
           checked={running}
+          />
+      <ToggleField
+          label='Show Notify'
+          onChange={async (checked) => {
+            setNotify(checked)
+            showNotify = checked
+            await setSettings(SHOW_NOTIFY, checked)
+          }}
+          checked={notify}
           />
       </PanelSectionRow>
     </PanelSection>
@@ -92,27 +106,40 @@ export default definePlugin((serverApi: ServerAPI) => {
     return await serverApi.callPluginMethod<any, any>("start_backend", {});
   }
 
-  const stopBackend = async () => {
-    return await serverApi.callPluginMethod<any, any>("stop_backend", {});
+  const notify = (title: string, body: string) => {
+    if (!showNotify) return
+    DeckyPluginLoader.toaster.toast({
+      title: title,
+      body: body,
+      duration: 1_500,
+      sound: 1,
+      icon: <GiNightSleep />,
+    });
   }
 
   let interval = setInterval(async () => {
     let data = await getEvent();
-    if(!data.result) return;
+    if(!data.success) return;
     console.debug(data)
     let event = data.result;
     for (let e of event) {
       if (e.type == 'Inhibit') {
+        notify("ScreenSaver", "Inhibit")
         await updateSetting(genSettings(1, 0)+genSettings(2, 0)+genSettings(3, 0)+genSettings(4, 0));
       } else if (e.type == 'UnInhibit') {
+        notify("ScreenSaver", "UnInhibit")
         await updateSetting(genSettings(1, 300)+genSettings(2, 300)+genSettings(3, 600)+genSettings(4, 600));
       }
     }
   }, 1000)
 
   setTimeout(async () => {
-    let run = await getSettings("run_on_login", true)
-    console.debug("run_on_login", run)
+    let notify = await getSettings(SHOW_NOTIFY, false)
+    if (notify.success) {
+      showNotify = notify.result
+    }
+
+    let run = await getSettings(RUN_ON_LOGIN, true)
     if (run.success && run.result) {
       backendRunning = true
       await startBackend()
@@ -127,7 +154,6 @@ export default definePlugin((serverApi: ServerAPI) => {
       if (interval) clearInterval(interval);
       if (handle) handle.unregister();
       setTimeout(async () => {
-        await stopBackend()
         await updateSetting(genSettings(1, 300)+genSettings(2, 300)+genSettings(3, 600)+genSettings(4, 600));
       }, 0);
     },
