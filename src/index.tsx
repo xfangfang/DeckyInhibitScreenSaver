@@ -9,9 +9,12 @@ import {
 import { VFC } from "react";
 import { useState } from 'react'
 import { GiNightSleep } from "react-icons/gi";
+import i18n from './i18n'
 
 let backendRunning = false;
 let showNotify     = false;
+let language = i18n.getCurrentLanguage()
+const t = i18n.useTranslations(language)
 
 const RUN_ON_LOGIN = "run_on_login"
 const SHOW_NOTIFY  = "show_notify"
@@ -31,12 +34,11 @@ const Content: VFC<{ serverApi: ServerAPI }> = ({serverApi}) => {
   const setSettings = async (key: string, value: any) => {
     return await serverApi.callPluginMethod<any, any>("set_settings", {key: key, value: value});
   }
-  
   return (
-    <PanelSection title="Settings">
+    <PanelSection title={t('Settings')}>
       <PanelSectionRow>
       <ToggleField
-          label='Background Monitor'
+          label={t('Background Monitor')}
           onChange={async (checked) => {
             setRunning(checked)
             backendRunning = checked
@@ -46,7 +48,7 @@ const Content: VFC<{ serverApi: ServerAPI }> = ({serverApi}) => {
           checked={running}
           />
       <ToggleField
-          label='Show Notify'
+          label={t('Show Notify')}
           onChange={async (checked) => {
             setNotify(checked)
             showNotify = checked
@@ -124,10 +126,10 @@ export default definePlugin((serverApi: ServerAPI) => {
     let event = data.result;
     for (let e of event) {
       if (e.type == 'Inhibit') {
-        notify("ScreenSaver", "Inhibit")
+        notify(t("ScreenSaver"), t("Inhibit"))
         await updateSetting(genSettings(1, 0)+genSettings(2, 0)+genSettings(3, 0)+genSettings(4, 0));
       } else if (e.type == 'UnInhibit') {
-        notify("ScreenSaver", "UnInhibit")
+        notify(t("ScreenSaver"), t("UnInhibit"))
         await updateSetting(genSettings(1, 300)+genSettings(2, 300)+genSettings(3, 600)+genSettings(4, 600));
       }
     }
