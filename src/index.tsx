@@ -54,7 +54,7 @@ export default definePlugin((serverApi: ServerAPI) => {
       }, 0);
 
       // 2. 弹出提示
-      DeckyPluginLoader.toaster.toast({
+      Window.DeckyPluginLoader.toaster.toast({
         title: "视频播放检测",
         body: "已关闭",
         icon: <GiNightSleep />,
@@ -112,7 +112,7 @@ export default definePlugin((serverApi: ServerAPI) => {
       } else if (e.type == 'UnInhibit') {
         // todo: restore
         requestChanging++;
-        await updateSetting(genSettings(1, 600)+genSettings(2, 600)+genSettings(3, 600)+genSettings(4, 600));
+        await updateSetting(genSettings(1, 300)+genSettings(2, 300)+genSettings(3, 600)+genSettings(4, 600));
       } if (e.type == 'brightness') {
         await SteamClient.System.Display.SetBrightness(e.value / 100);
       } else if (e.type == 'idle') {

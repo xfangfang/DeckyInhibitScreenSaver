@@ -1,10 +1,10 @@
 {
-  "name": "DeckSuspendManager",
-  "author": "John Doe",
-  "flags": ["debug", "_root"],
+  "name": "ScreenSaver",
+  "author": "xfangfang",
+  "flags": [],
   "publish": {
-    "tags": ["template", "root"],
-    "description": "Deck Screen Saver.",
-    "image": "https://opengraph.githubassets.com/1/SteamDeckHomebrew/PluginLoader"
+    "tags": ["dbus", "screensaver"],
+    "description": "Inhibit screensaver during video playback.",
+    "image": "https://opengraph.githubassets.com/1/xfangfang/DeckyInhibitScreenSaver"
   }
 }
