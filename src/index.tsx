@@ -48,6 +48,8 @@ const Content: VFC<{ serverApi: ServerAPI }> = ({serverApi}) => {
           checked={running}
           />
       <label>{t('bg_tip')}</label>
+      </PanelSectionRow>
+      <PanelSectionRow>
       <ToggleField
           label={t('Show Notify')}
           onChange={async (checked) => {
@@ -110,15 +112,19 @@ export default definePlugin((serverApi: ServerAPI) => {
     return await serverApi.callPluginMethod<any, any>("start_backend", {});
   }
 
+  let timeout:NodeJS.Timeout;
   const notify = (title: string, body: string) => {
     if (!showNotify) return
-    DeckyPluginLoader.toaster.toast({
-      title: title,
-      body: body,
-      duration: 1_500,
-      sound: 1,
-      icon: <GiNightSleep />,
-    });
+    clearTimeout(timeout)
+    timeout = setTimeout(()=>{
+      DeckyPluginLoader.toaster.toast({
+        title: title,
+        body: body,
+        duration: 1_500,
+        sound: 1,
+        icon: <GiNightSleep />,
+      });
+    }, 2000)
   }
 
   let interval = setInterval(async () => {

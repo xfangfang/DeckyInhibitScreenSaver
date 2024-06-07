@@ -1,6 +1,14 @@
 # Decky Screen Saver
 
-Inhibit screensaver during video playback
+This is a plugin for Decky Loader (A plugin loader for the Steam Deck), it will automatically inhibit screensaver during video playback under SteamOS game mode.
+
+### How to install
+
+1. Install Decky Loader: https://decky.xyz
+2. Download `ScreenSaver.zip` from: https://github.com/xfangfang/DeckyInhibitScreenSaver/releases
+3. Unzip `ScreenSaver.zip` to the `/home/deck/homebrew/plugins` directory and restart Steam
+
+[Welcome to buy me a cup of coffee](https://www.paypal.me/xfangfang)
 
 ### How does this plugin work
 
