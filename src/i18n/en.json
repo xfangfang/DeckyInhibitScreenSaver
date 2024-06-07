@@ -4,5 +4,7 @@
     "Show Notify": "Show Notify",
     "ScreenSaver": "ScreenSaver",
     "Inhibit": "Inhibit",
-    "UnInhibit": "UnInhibit"
+    "UnInhibit": "UnInhibit",
+    "bg_tip": "Register for D-Bus service and listen for inhibit screensaver requests from applications (usually video player, browser, etc.)",
+    "notify_tip": "Send notifications when certain applications request to modify the status of the screensaver"
 }

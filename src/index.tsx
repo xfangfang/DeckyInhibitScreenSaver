@@ -47,6 +47,7 @@ const Content: VFC<{ serverApi: ServerAPI }> = ({serverApi}) => {
           }}
           checked={running}
           />
+      <label>{t('bg_tip')}</label>
       <ToggleField
           label={t('Show Notify')}
           onChange={async (checked) => {
@@ -56,6 +57,7 @@ const Content: VFC<{ serverApi: ServerAPI }> = ({serverApi}) => {
           }}
           checked={notify}
           />
+      <label>{t('notify_tip')}</label>
       </PanelSectionRow>
     </PanelSection>
   );

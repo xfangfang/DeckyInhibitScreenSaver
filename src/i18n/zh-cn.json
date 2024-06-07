@@ -4,5 +4,7 @@
     "Show Notify": "显示通知",
     "ScreenSaver": "屏幕保护",
     "Inhibit": "禁用",
-    "UnInhibit": "开启"
+    "UnInhibit": "开启",
+    "bg_tip": "注册 steamOS 游戏模式缺失的 D-Bus 服务，并监听应用的禁止熄屏请求（通常是视频播放应用、浏览器等）",
+    "notify_tip": "在应用请求的熄屏状态修改时发送一条通知"
 }
