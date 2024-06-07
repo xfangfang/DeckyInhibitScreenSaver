@@ -1,5 +1,7 @@
 # Decky Screen Saver
 
+[English](./README.md)
+
 这是一个适用于 Decky Loader (SteamDeck插件加载器) 的插件，在使用 SteamDeck 游戏模式播放视频时，这个插件会自动禁用系统锁屏，让用户有一个舒适的观影体验。
 
 ### 如何安装
@@ -9,9 +11,9 @@
 2. 解压 `ScreenSaver.zip` 到 `/home/deck/homebrew/plugins` 目录下，重启 Steam
 
 <p>
+感谢大家的赞助，这将大大支持我制作更多更好的开源应用
 <details >
 <summary id="sponsorships"><b>捐助二维码:（点击展开）</b></summary>
-感谢大家的赞助，这将大大帮助我制作更多更好的开源应用
 <img  width="400" src="https://xfangfang.github.io/Macast/sponsorships.png" />
 </details>
 </p>

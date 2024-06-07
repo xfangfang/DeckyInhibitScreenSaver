@@ -1,5 +1,7 @@
 # Decky Screen Saver
 
+[中文说明](./README_ZH.md)
+
 This is a plugin for Decky Loader (A plugin loader for the Steam Deck), it will automatically inhibit screensaver during video playback under SteamOS game mode.
 
 ### How to install
