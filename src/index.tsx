@@ -4,6 +4,8 @@ import {
   PanelSection,
   PanelSectionRow,
   ServerAPI,
+  findModuleChild,
+  Module,
   staticClasses,
 } from "decky-frontend-lib";
 import { VFC } from "react";
@@ -15,6 +17,22 @@ let backendRunning = false;
 let showNotify     = false;
 let language = i18n.getCurrentLanguage()
 const t = i18n.useTranslations(language)
+
+const findModule = (property: string) => {
+  return findModuleChild((m: Module) => {
+    if (typeof m !== "object") return undefined;
+    for (let prop in m) {
+      try {
+        if (m[prop][property]) {
+          return m[prop];
+        }
+      } catch (e) {
+        return undefined;
+      }
+    }
+  });
+}
+const SystemSleep = findModule("InitiateSleep")
 
 const RUN_ON_LOGIN = "run_on_login"
 const SHOW_NOTIFY  = "show_notify"
@@ -66,15 +84,32 @@ const Content: VFC<{ serverApi: ServerAPI }> = ({serverApi}) => {
 };
 
 export default definePlugin((serverApi: ServerAPI) => {
-  function onSettingsChanges(buffer: ArrayBuffer) {
-    let view        = new DataView(buffer);
-    let ac_idle         = view.getFloat32(6, true);
-    let battery_idle    = view.getFloat32(1, true);
-    let ac_suspend      = view.getFloat32(16, true);
-    let battery_suspend = view.getFloat32(11,true)
-    console.debug(`${ac_idle}, ${battery_idle}, ${ac_suspend}, ${battery_suspend}`)
-  };
-  let handle = SteamClient.System.RegisterForSettingsChanges(onSettingsChanges);
+  let forced_suspend:NodeJS.Timeout;
+  let forced_suspend_tip:NodeJS.Timeout;
+  let input_changed:boolean = true;
+
+  const clearSuspendTimeout = () => {
+    clearTimeout(forced_suspend)
+    clearTimeout(forced_suspend_tip)
+  }
+
+  const controllerHandle = SteamClient.Input.RegisterForControllerStateChanges(
+    (changes: any[]) => {
+      if (input_changed) return
+      for (const inputs of changes) {
+        const { ulButtons, sLeftStickX, sLeftStickY, sRightStickX, sRightStickY, } = inputs;
+        if (ulButtons != 0) { input_changed = true; }
+        if (Math.abs(sLeftStickX) > 5000 || Math.abs(sLeftStickY) > 5000 ||
+            Math.abs(sRightStickX) > 5000 || Math.abs(sRightStickY) > 5000) {
+              input_changed = true;
+        }
+      }
+      if (input_changed) {
+        clearSuspendTimeout()
+      }
+    }
+  );
+  const suspendHandle = SteamClient.System.RegisterForOnSuspendRequest(clearSuspendTimeout);
 
   /**
    * Protobuf setting generation
@@ -117,7 +152,7 @@ export default definePlugin((serverApi: ServerAPI) => {
     if (!showNotify) return
     clearTimeout(timeout)
     timeout = setTimeout(()=>{
-      DeckyPluginLoader.toaster.toast({
+      serverApi.toaster.toast({
         title: title,
         body: body,
         duration: 1_500,
@@ -130,15 +165,35 @@ export default definePlugin((serverApi: ServerAPI) => {
   let interval = setInterval(async () => {
     let data = await getEvent();
     if(!data.success) return;
-    console.debug(data)
     let event = data.result;
     for (let e of event) {
       if (e.type == 'Inhibit') {
         notify(t("ScreenSaver"), t("Inhibit"))
+        clearSuspendTimeout()
         await updateSetting(genSettings(1, 0)+genSettings(2, 0)+genSettings(3, 0)+genSettings(4, 0));
       } else if (e.type == 'UnInhibit') {
         notify(t("ScreenSaver"), t("UnInhibit"))
         await updateSetting(genSettings(1, 300)+genSettings(2, 300)+genSettings(3, 600)+genSettings(4, 600));
+        // 1. there is no operation for a long period of time (like 15 minutes)
+        // 2. the application automatically uninhibit screensaver
+        // 3. there is no operation after uninhibit screensaver
+        // When these three things happen in sequence, the system will continue to not suspend, even if the time we set has already been reached.
+        // In this case, we use a custom timer to suspend system as the workaround.
+        clearSuspendTimeout()
+        input_changed = false
+        forced_suspend = setTimeout(() => {
+          forced_suspend_tip = setTimeout(()=>{
+            SystemSleep.InitiateSleep()
+          }, 5_000)
+          serverApi.toaster.toast({
+            title: t("suspend_tip_title"),
+            body: t("suspend_tip_body"),
+            critical: true,
+            duration: 5_000,
+            playSound: false,
+            icon: <GiNightSleep />,
+          });
+        }, 450_000)
       }
     }
   }, 1000)
@@ -162,7 +217,8 @@ export default definePlugin((serverApi: ServerAPI) => {
     icon: <GiNightSleep />,
     onDismount() {
       if (interval) clearInterval(interval);
-      if (handle) handle.unregister();
+      if (controllerHandle) controllerHandle.unregister()
+      if (suspendHandle) suspendHandle.unregister()
       setTimeout(async () => {
         await updateSetting(genSettings(1, 300)+genSettings(2, 300)+genSettings(3, 600)+genSettings(4, 600));
       }, 0);

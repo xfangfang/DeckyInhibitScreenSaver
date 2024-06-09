@@ -5,6 +5,8 @@
     "ScreenSaver": "ScreenSaver",
     "Inhibit": "Inhibit",
     "UnInhibit": "UnInhibit",
+    "suspend_tip_title": "The device will automatically suspend in 5 seconds",
+    "suspend_tip_body": "Press any gamepad key to cancel",
     "bg_tip": "Register for D-Bus service and listen for inhibit screensaver requests from applications (usually video player, browser, etc.)",
     "notify_tip": "Send notifications when certain applications request to modify the status of the screensaver"
 }
