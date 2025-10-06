@@ -55,8 +55,7 @@ class BaseInterface(ServiceInterface):
     def __init__(self, service):
         super().__init__(service)
 
-    @method()
-    async def Inhibit(self, application: 's', reason: 's') -> 'u':
+    async def _inhibit_impl(self, application, reason):
         if application in BaseInterface.ignore_application: return 0
         decky_plugin.logger.info(f'called Inhibit with application={application} and reason={reason}')
         event_queue.put({"type": "Inhibit"})
@@ -65,8 +64,7 @@ class BaseInterface(ServiceInterface):
         BaseInterface.request_map[BaseInterface.cookie] = AppRequest(sender, BaseInterface.cookie, application, reason)
         return BaseInterface.cookie
 
-    @method()
-    def UnInhibit(self, cookie: 'u'):
+    async def _un_inhibit_impl(self, cookie):
         if cookie == 0: return
         decky_plugin.logger.info(f'called UnInhibit with cookie={cookie}')
         if BaseInterface.request_map.pop(cookie, None) is None:
@@ -78,9 +76,37 @@ class InhibitInterface(BaseInterface):
     def __init__(self):
         super().__init__('org.freedesktop.ScreenSaver')
 
+    @method()
+    async def Inhibit(self, application: 's', reason: 's') -> 'u':
+        return await self._inhibit_impl(application, reason)
+
+    @method()
+    async def UnInhibit(self, cookie: 'u'):
+        return await self._un_inhibit_impl(cookie)
+
 class PMInhibitInterface(BaseInterface):
     def __init__(self):
         super().__init__('org.freedesktop.PowerManagement.Inhibit')
+
+    @method()
+    async def Inhibit(self, application: 's', reason: 's') -> 'u':
+        return await self._inhibit_impl(application, reason)
+
+    @method()
+    async def UnInhibit(self, cookie: 'u'):
+        return await self._un_inhibit_impl(cookie)
+
+class GnomeInterface(BaseInterface):
+    def __init__(self):
+        super().__init__('org.gnome.SessionManager')
+
+    @method()
+    async def Inhibit(self, application: 's', xid: 'u', reason: 's', flags: 'u') -> 'u':
+        return await self._inhibit_impl(application, reason)
+
+    @method()
+    async def Uninhibit(self, cookie: 'u'):
+        return await self._un_inhibit_impl(cookie)
 
 async def stop_dbus():
     global bus
@@ -98,11 +124,14 @@ async def start_dbus():
         bus = await MessageBus().connect()
         interface = InhibitInterface()
         pm_interface = PMInhibitInterface()
+        gnome_interface = GnomeInterface()
         bus.export('/ScreenSaver', interface) # vlc
         bus.export('/org/freedesktop/ScreenSaver', interface) # chrome
         bus.export('/org/freedesktop/PowerManagement/Inhibit', pm_interface) # wiliwili
+        bus.export('/org/gnome/SessionManager', gnome_interface) # mpv with https://github.com/Guldoman/mpv_inhibit_gnome installed
         await bus.request_name('org.freedesktop.PowerManagement')
         await bus.request_name('org.freedesktop.ScreenSaver')
+        await bus.request_name('org.gnome.SessionManager')
     except Exception as e:
         decky_plugin.logger.info(f"error: {e}")
 
@@ -158,7 +187,7 @@ class Plugin:
 
     async def _unload(self):
         decky_plugin.logger.info("Goodnight World!")
-        stop_dbus()
+        await stop_dbus()
 
     async def _uninstall(self):
         pass

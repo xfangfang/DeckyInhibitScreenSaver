@@ -27,4 +27,5 @@
 ### 兼容的软件
 - [x] VLC
 - [x] Chrome
+- [x] mpv (支持 Flathub 商店版，其余需要安装 [mpv_inhibit_gnome](https://github.com/Guldoman/mpv_inhibit_gnome))
 - [x] wiliwili
