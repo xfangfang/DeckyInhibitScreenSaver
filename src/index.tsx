@@ -93,7 +93,11 @@ export default definePlugin((serverApi: ServerAPI) => {
     clearTimeout(forced_suspend_tip)
   }
 
-  const controllerHandle = SteamClient.Input.RegisterForControllerStateChanges(
+  // SteamClient version 1759461205 does not have `RegisterForControllerStateChanges`
+  let controllerHandle: any = null;
+  controllerHandle =
+    SteamClient.Input.RegisterForControllerStateChanges &&
+    SteamClient.Input.RegisterForControllerStateChanges (
     (changes: any[]) => {
       if (input_changed) return
       for (const inputs of changes) {
@@ -109,7 +113,24 @@ export default definePlugin((serverApi: ServerAPI) => {
       }
     }
   );
-  const suspendHandle = SteamClient.System.RegisterForOnSuspendRequest(clearSuspendTimeout);
+  if (!controllerHandle) {
+    controllerHandle = SteamClient.Input.RegisterForControllerInputMessages(
+      () => {
+        if (input_changed) return
+        input_changed = true
+        clearSuspendTimeout()
+      }
+    );
+  }
+
+  // SteamClient version 1759461205 does not have `RegisterForOnSuspendRequest`
+  let suspendHandle: any = null
+  suspendHandle =
+    SteamClient.System.RegisterForOnSuspendRequest && 
+    SteamClient.System.RegisterForOnSuspendRequest(clearSuspendTimeout);
+  if (!suspendHandle) {
+    suspendHandle = SteamClient.User.RegisterForPrepareForSystemSuspendProgress(clearSuspendTimeout);
+  }
 
   /**
    * Protobuf setting generation
