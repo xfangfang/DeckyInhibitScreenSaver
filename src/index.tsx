@@ -93,6 +93,31 @@ export default definePlugin((serverApi: ServerAPI) => {
     clearTimeout(forced_suspend_tip)
   }
 
+  let SettingDef = {
+    battery_idle: {
+      field: 1,
+      wireType: 5
+    },
+    ac_idle: {
+      field: 2,
+      wireType: 5
+    },
+    battery_suspend: {
+      field: 3,
+      wireType: 5
+    },
+    ac_suspend: {
+      field: 4,
+      wireType: 5
+    },
+  }
+
+  const _updateSettings = async (data: string) => {
+    await SteamClient.System.UpdateSettings(window.btoa(data))
+  }
+  let updateIdleSetting = _updateSettings;
+  let updateSuspendSetting = _updateSettings;
+
   // SteamClient version 1759461205 does not have `RegisterForControllerStateChanges`
   let controllerHandle: any = null;
   controllerHandle =
@@ -123,37 +148,69 @@ export default definePlugin((serverApi: ServerAPI) => {
     );
   }
 
-  // SteamClient version 1759461205 does not have `RegisterForOnSuspendRequest`
+  // SteamClient023 does not have `RegisterForOnSuspendRequest`
   let suspendHandle: any = null
   suspendHandle =
     SteamClient.System.RegisterForOnSuspendRequest && 
     SteamClient.System.RegisterForOnSuspendRequest(clearSuspendTimeout);
   if (!suspendHandle) {
     suspendHandle = SteamClient.User.RegisterForPrepareForSystemSuspendProgress(clearSuspendTimeout);
+
+    // SteamClient023 using new suspend settings
+    SettingDef.battery_suspend = {
+      field: 24003,
+      wireType: 0
+    }
+    SettingDef.ac_suspend = {
+      field: 24004,
+      wireType: 0
+    }
+    updateSuspendSetting = async (data: string) => {
+      await SteamClient.Settings.SetSetting(window.btoa(data))
+    };
   }
 
   /**
    * Protobuf setting generation
-   * @param index 1:battery_idle; 2:ac_idle; 3:battery_suspend; 4:ac_suspend
-   * @param data 0 for disable (seconds)
+   * @param field 1:battery_idle; 2:ac_idle; 3/24003:battery_suspend; 4/24004:ac_suspend
+   * @param value 0 for disable (seconds)
+   * @param wireType 0 for int32, 5 for float
    * @returns settings in binary string
    */
-  function genSettings(index: number, data: number) {
-    let buffer = new ArrayBuffer(5);
-    let view = new DataView(buffer);
-    view.setUint8(0, index << 3 | 5);
-    view.setFloat32(1, data, true);
-    let binary = '';
-    let bytes = new Uint8Array(buffer);
-    let len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
+  function genSettings(field: any, value: number) {
+    const buf = [];
+    
+    let key = (field.field << 3) | field.wireType;
+    do {
+      let b = key & 0x7F;
+      key >>>= 7;
+      if (key) b |= 0x80;
+      buf.push(b);
+    } while (key);
+
+    if (field.wireType === 0) {
+      do {
+        let b = value & 0x7F;
+        value >>>= 7;
+        if (value) b |= 0x80;
+        buf.push(b);
+      } while (value);
+      return String.fromCharCode(...buf);
+    } else if (field.wireType === 5) {
+      const valueBytes = new Uint8Array(new Float32Array([value]).buffer);
+      return String.fromCharCode(...buf, ...valueBytes);
+    } else {
+      throw new Error('Unsupported wire type');
     }
-    return binary;
   }
 
-  const updateSetting = async (data: string) => {
-    await SteamClient.System.UpdateSettings(window.btoa(data))
+  async function updateSetting(battery_idle: number, ac_idle: number, battery_suspend: number, ac_suspend: number) {
+    let _battery_idle = genSettings(SettingDef.battery_idle, battery_idle);
+    let _ac_idle = genSettings(SettingDef.ac_idle, ac_idle);
+    let _battery_suspend = genSettings(SettingDef.battery_suspend, battery_suspend);
+    let _ac_suspend = genSettings(SettingDef.ac_suspend, ac_suspend);
+    await updateIdleSetting(_battery_idle+_ac_idle);
+    await updateSuspendSetting(_battery_suspend+_ac_suspend);
   }
   
   const getEvent = async () => {
@@ -191,10 +248,10 @@ export default definePlugin((serverApi: ServerAPI) => {
       if (e.type == 'Inhibit') {
         notify(t("ScreenSaver"), t("Inhibit"))
         clearSuspendTimeout()
-        await updateSetting(genSettings(1, 0)+genSettings(2, 0)+genSettings(3, 0)+genSettings(4, 0));
+        await updateSetting(0, 0, 0, 0);
       } else if (e.type == 'UnInhibit') {
         notify(t("ScreenSaver"), t("UnInhibit"))
-        await updateSetting(genSettings(1, 300)+genSettings(2, 300)+genSettings(3, 600)+genSettings(4, 600));
+        await updateSetting(300, 300, 600, 600);
         // 1. there is no operation for a long period of time (like 15 minutes)
         // 2. the application automatically uninhibit screensaver
         // 3. there is no operation after uninhibit screensaver
@@ -241,7 +298,7 @@ export default definePlugin((serverApi: ServerAPI) => {
       if (controllerHandle) controllerHandle.unregister()
       if (suspendHandle) suspendHandle.unregister()
       setTimeout(async () => {
-        await updateSetting(genSettings(1, 300)+genSettings(2, 300)+genSettings(3, 600)+genSettings(4, 600));
+        await updateSetting(300, 300, 600, 600);
       }, 0);
     },
   };
